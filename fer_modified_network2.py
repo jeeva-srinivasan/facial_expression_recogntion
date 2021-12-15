@@ -36,21 +36,21 @@ from keras.utils import np_utils
 
 
 
-df = pd.read_csv('drive/MyDrive/fer_models/fer2013.csv')
-print(df.shape)
-df.head()
+dataset = pd.read_csv('drive/MyDrive/fer_models/fer2013.csv')
+print(dataset.shape)
+dataset.head()
 
-df.emotion.unique()
+dataset.emotion.unique()
 
 emotion_label_to_text = {0:'anger', 1:'disgust', 2:'fear', 3:'happiness', 4: 'sadness', 5: 'surprise', 6: 'neutral'}
 
-sns.countplot(df.emotion)
+sns.countplot(dataset.emotion)
 pyplot.show()
 
+#data agumentation to remove class imbalance 
 def augment_pixels(px, IMG_SIZE = 48):
     image = np.array(px.split(' ')).reshape(IMG_SIZE, IMG_SIZE).astype('float32')
     image = tf.image.random_flip_left_right(image.reshape(IMG_SIZE,IMG_SIZE,1))
-    # Pad image size
     image = tf.image.resize_with_crop_or_pad(image, IMG_SIZE + 12, IMG_SIZE + 12) 
     # Random crop back to the original size
     image = tf.image.random_crop(image, size=[IMG_SIZE, IMG_SIZE, 1])
@@ -60,12 +60,12 @@ def augment_pixels(px, IMG_SIZE = 48):
     str_augmented = ' '.join(augmented.reshape(IMG_SIZE*IMG_SIZE).astype('int').astype(str))
     return str_augmented
 
-valcounts = df.emotion.value_counts()
+valcounts = dataset.emotion.value_counts()
 valcounts_diff = valcounts[valcounts.idxmax()] - valcounts
 for emotion_idx, aug_count in valcounts_diff.iteritems():
-    sampled = df.query("emotion==@emotion_idx").sample(aug_count, replace=True)
+    sampled = dataset.query("emotion==@emotion_idx").sample(aug_count, replace=True)
     sampled['pixels'] = sampled.pixels.apply(augment_pixels)
-    df = pd.concat([df, sampled])
+    dataset = pd.concat([dataset, sampled])
     print(emotion_idx, aug_count)
 
 # Check again to see if dataset size is similar across emotions.
@@ -90,13 +90,13 @@ for label in sorted(df.emotion.unique()):
         ax.set_title(emotion_label_to_text[label])
         pyplot.tight_layout()
 
-img_array = df.pixels.apply(lambda x: np.array(x.split(' ')).reshape(48, 48, 1).astype('float32'))
+img_array = dataset.pixels.apply(lambda x: np.array(x.split(' ')).reshape(48, 48, 1).astype('float32'))
 img_array = np.stack(img_array, axis=0)
 
 img_array.shape
 
 le = LabelEncoder()
-img_labels = le.fit_transform(df.emotion)
+img_labels = le.fit_transform(dataset.emotion)
 img_labels = np_utils.to_categorical(img_labels)
 img_labels.shape
 
@@ -114,16 +114,14 @@ num_classes = y_train.shape[1]
 X_train = X_train / 255.
 X_valid = X_valid / 255.
 
-def build_net(optim):
+def build_network(optim):
     """
     This is a Deep Convolutional Neural Network (DCNN). For generalization purpose I used dropouts in regular intervals.
-    I used `ELU` as the activation because it avoids dying relu problem but also performed well as compared to LeakyRelu
-    atleast in this case. `he_normal` kernel initializer is used as it suits ELU. BatchNormalization is also used for better
-    results.
+    I have used relu activation `he_normal` kernel initializer. BatchNormalization is also used for better performance.
     """
-    net = Sequential(name='DCNN')
+    network = Sequential(name='DCNN')
 
-    net.add(
+    network.add(
         Conv2D(
             filters=64,
             kernel_size=(5,5),
@@ -134,8 +132,8 @@ def build_net(optim):
             name='conv2d_1'
         )
     )
-    net.add(BatchNormalization(name='batchnorm_1'))
-    net.add(
+    network.add(BatchNormalization(name='batchnorm_1'))
+    network.add(
         Conv2D(
             filters=64,
             kernel_size=(5,5),
@@ -145,12 +143,12 @@ def build_net(optim):
             name='conv2d_2'
         )
     )
-    net.add(BatchNormalization(name='batchnorm_2'))
+    network.add(BatchNormalization(name='batchnorm_2'))
     
-    net.add(MaxPooling2D(pool_size=(2,2), name='maxpool2d_1'))
-    net.add(Dropout(0.4, name='dropout_1'))
+    network.add(MaxPooling2D(pool_size=(2,2), name='maxpool2d_1'))
+    network.add(Dropout(0.4, name='dropout_1'))
 
-    net.add(
+    network.add(
         Conv2D(
             filters=128,
             kernel_size=(3,3),
@@ -160,8 +158,8 @@ def build_net(optim):
             name='conv2d_3'
         )
     )
-    net.add(BatchNormalization(name='batchnorm_3'))
-    net.add(
+    network.add(BatchNormalization(name='batchnorm_3'))
+    network.add(
         Conv2D(
             filters=128,
             kernel_size=(3,3),
@@ -171,12 +169,12 @@ def build_net(optim):
             name='conv2d_4'
         )
     )
-    net.add(BatchNormalization(name='batchnorm_4'))
+    network.add(BatchNormalization(name='batchnorm_4'))
     
-    net.add(MaxPooling2D(pool_size=(2,2), name='maxpool2d_2'))
-    net.add(Dropout(0.4, name='dropout_2'))
+    network.add(MaxPooling2D(pool_size=(2,2), name='maxpool2d_2'))
+    network.add(Dropout(0.4, name='dropout_2'))
 
-    net.add(
+    network.add(
         Conv2D(
             filters=256,
             kernel_size=(3,3),
@@ -186,8 +184,8 @@ def build_net(optim):
             name='conv2d_5'
         )
     )
-    net.add(BatchNormalization(name='batchnorm_5'))
-    net.add(
+    network.add(BatchNormalization(name='batchnorm_5'))
+    network.add(
         Conv2D(
             filters=256,
             kernel_size=(3,3),
@@ -197,8 +195,8 @@ def build_net(optim):
             name='conv2d_6'
         )
     )
-    net.add(BatchNormalization(name='batchnorm_6'))
-    net.add(
+    network.add(BatchNormalization(name='batchnorm_6'))
+    network.add(
         Conv2D(
             filters=512,
             kernel_size=(3,3),
@@ -208,14 +206,14 @@ def build_net(optim):
             name='conv2d_7'
         )
     )
-    net.add(BatchNormalization(name='batchnorm_7'))
+    network.add(BatchNormalization(name='batchnorm_7'))
     
-    net.add(MaxPooling2D(pool_size=(2,2), name='maxpool2d_3'))
-    net.add(Dropout(0.5, name='dropout_3'))
+    network.add(MaxPooling2D(pool_size=(2,2), name='maxpool2d_3'))
+    nnetworket.add(Dropout(0.5, name='dropout_3'))
 
-    net.add(Flatten(name='flatten'))
+    network.add(Flatten(name='flatten'))
         
-    net.add(
+    network.add(
         Dense(
             128,
             activation='elu',
@@ -223,11 +221,11 @@ def build_net(optim):
             name='dense_1'
         )
     )
-    net.add(BatchNormalization(name='batchnorm_8'))
+    network.add(BatchNormalization(name='batchnorm_8'))
     
-    net.add(Dropout(0.6, name='dropout_4'))
+    network.add(Dropout(0.6, name='dropout_4'))
     
-    net.add(
+    network.add(
         Dense(
             num_classes,
             activation='softmax',
@@ -235,15 +233,15 @@ def build_net(optim):
         )
     )
     
-    net.compile(
+    network.compile(
         loss='categorical_crossentropy',
         optimizer=optim,
         metrics=['accuracy']
     )
     
-    net.summary()
+    network.summary()
     
-    return net
+    return network
 
 """
 I used two callbacks one is `early stopping` for avoiding overfitting training data
@@ -283,12 +281,12 @@ train_datagen = ImageDataGenerator(
 train_datagen.fit(X_train)
 
 optims = [
-    optimizers.Nadam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-07, name='Nadam'),
+    optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-07, name='Adam'),
     optimizers.Adam(0.001),
 ]
 
-# I tried both `Nadam` and `Adam`, the difference in results is not different but I finally went with Nadam as it is more popular.
-model = build_net(optims[1])
+
+model = build_network(optims[1])
 
 batch_size = 32
 epochs = 100
@@ -302,7 +300,7 @@ history = model.fit_generator(
 )
 
 #saving model
-model.save("drive/MyDrive/fer_models/fer_gpu3/fer_model_new3.h5")
+model.save("drive/MyDrive/fer_models/fer_gpu3/fer_model_cnn_final.h5")
 
 sns.set()
 fig = pyplot.figure(0, (12, 4))
@@ -319,7 +317,7 @@ sns.lineplot(history.epoch, history.history['val_loss'], label='valid')
 pyplot.title('Loss')
 pyplot.tight_layout()
 
-pyplot.savefig('drive/MyDrive/fer_models/fer_gpu3/epoch_history_dcnn_new3.png')
+pyplot.savefig('drive/MyDrive/fer_models/fer_gpu3/epoch_history_dcnn_final.png')
 pyplot.show()
 
 df_accu = pd.DataFrame({'train': history.history['accuracy'], 'valid': history.history['val_accuracy']})
@@ -336,14 +334,14 @@ sns.violinplot(x="variable", y="value", data=pd.melt(df_loss), showfliers=False)
 pyplot.title('Loss')
 pyplot.tight_layout()
 
-pyplot.savefig('drive/MyDrive/fer_models/fer_gpu3/performance_dist_new3.png')
+pyplot.savefig('drive/MyDrive/fer_models/fer_gpu3/performance_dist_final.png')
 pyplot.show()
 
 predict_x=model.predict(X_valid) 
 yhat_valid=np.argmax(predict_x,axis=1)
 
 scikitplot.metrics.plot_confusion_matrix(np.argmax(y_valid, axis=1), yhat_valid, figsize=(7,7))
-pyplot.savefig("drive/MyDrive/fer_models/fer_gpu3/confusion_matrix_dcnn_new3.png")
+pyplot.savefig("drive/MyDrive/fer_models/fer_gpu3/confusion_matrix_dcnn_final.png")
 
 print(f'total wrong validation predictions: {np.sum(np.argmax(y_valid, axis=1) != yhat_valid)}\n\n')
 print(classification_report(np.argmax(y_valid, axis=1), yhat_valid))
